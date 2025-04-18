@@ -8,4 +8,8 @@ def health_check():
 
 @app.get("/surprise")
 def surprise():
-    return {"יהיה לנו פרויקט מפחיד נודר"}
+    return {"We will have amazing project !"}
+
+@app.get("/awsdeploy")
+def surprise():
+    return {"We will have amazing project !"}
