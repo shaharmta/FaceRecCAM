@@ -3,7 +3,7 @@ name: Deploy to Elastic Beanstalk
 on:
   push:
     branches:
-      - main  # or the branch you want to trigger deployment from
+      - main
 
 jobs:
   deploy:
@@ -18,17 +18,14 @@ jobs:
         with:
           python-version: 3.11
 
-      - name: Install AWS CLI
+      - name: Install EB CLI
         run: |
           pip install --upgrade pip
           pip install awsebcli
 
-      - name: Deploy to EB
+      - name: Deploy to Elastic Beanstalk
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          AWS_REGION: us-east-1  # change to your region
         run: |
-          eb init FaceCamRec --platform "Python 3.11" --region $AWS_REGION
-          eb use FaceCamRec-env-1 
           eb deploy
