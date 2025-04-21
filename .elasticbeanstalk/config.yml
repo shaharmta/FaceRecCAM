@@ -1,0 +1,7 @@
+branch-defaults:
+  main:
+    environment: FaceCamRec-env-1
+global:
+  application_name: FaceCamRec
+  default_region: eu-north-1
+  platform: "Python 3.11"  
