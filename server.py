@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+import mind
 
 app = FastAPI()
 
@@ -6,10 +7,13 @@ app = FastAPI()
 def health_check():
     return {"status": "healthy"}
 
+
 @app.get("/surprise")
 def surprise():
     return {"We will have amazing project !"}
 
 @app.get("/awsdeploy")
 def surprise():
-    return {"We will have amazing project !"}
+    return {"deployed through github actions !"}
+
+
