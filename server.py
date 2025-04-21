@@ -14,6 +14,6 @@ def surprise():
 
 @app.get("/awsdeploy")
 def surprise():
-    return {"deployed through github actions !"}
+    return {"deployed through github actions second try !"}
 
 
