@@ -3,23 +3,20 @@ import face_recognition
 import numpy as np
 import uvicorn
 import os
+import io
 
 app = FastAPI()
 
 # Preloaded known face encodings (can be loaded dynamically later)
-known_faces = {
-    "person1": np.load("person1.npy"),
-    "person2": np.load("person2.npy"),
-}
+known_faces = {}
 
-THRESHOLD = 0.6  # Distance threshold for face matching
+THRESHOLD = 0.8  # Distance threshold for face matching
 
 # Detect and identify a face from an uploaded image
 @app.post("/detect")
 async def detect(file: UploadFile = File(...)):
     content = await file.read()
-    np_arr = np.frombuffer(content, np.uint8)
-    img = face_recognition.load_image_file(np_arr)
+    img = face_recognition.load_image_file(io.BytesIO(content))
 
     encodings = face_recognition.face_encodings(img)
     if len(encodings) == 0:
@@ -32,9 +29,13 @@ async def detect(file: UploadFile = File(...)):
 
     for name, known_encoding in known_faces.items():
         distance = np.linalg.norm(query_encoding - known_encoding)
+        print(f"Comparing with {name}, distance: {distance}")
         if distance < best_distance:
             best_distance = distance
             best_match = name
+
+    if best_match is None or best_distance == float('inf'):
+        return {"match": None, "distance": None}   
 
     if best_distance < THRESHOLD:
         return {"match": best_match, "distance": best_distance}
@@ -45,8 +46,8 @@ async def detect(file: UploadFile = File(...)):
 @app.post("/add-face")
 async def add_face(name: str, file: UploadFile = File(...)):
     content = await file.read()
-    np_arr = np.frombuffer(content, np.uint8)
-    img = face_recognition.load_image_file(np_arr)
+
+    img = face_recognition.load_image_file(io.BytesIO(content)) 
 
     encodings = face_recognition.face_encodings(img)
     if len(encodings) == 0:
