@@ -1,13 +1,16 @@
-from fastapi import FastAPI, UploadFile, File, HTTPException, Query, Depends
+from fastapi import FastAPI, UploadFile, File, HTTPException, Query, Depends, WebSocket, WebSocketDisconnect
 from datetime import datetime
 import uvicorn
 import os
 import io
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Set
 from pydantic import BaseModel, Field
 import httpx
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
+import json
+import asyncio
+from fastapi.staticfiles import StaticFiles
 
 app = FastAPI(
     title="Face Recognition API Gateway",
@@ -24,6 +27,30 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Mount static files for UI
+app.mount("/ui", StaticFiles(directory="ui_app/build", html=True), name="ui")
+
+# WebSocket connection manager
+class ConnectionManager:
+    def __init__(self):
+        self.active_connections: Set[WebSocket] = set()
+
+    async def connect(self, websocket: WebSocket):
+        await websocket.accept()
+        self.active_connections.add(websocket)
+
+    def disconnect(self, websocket: WebSocket):
+        self.active_connections.remove(websocket)
+
+    async def broadcast(self, message: dict):
+        for connection in self.active_connections:
+            try:
+                await connection.send_json(message)
+            except WebSocketDisconnect:
+                self.disconnect(connection)
+
+manager = ConnectionManager()
+
 # Configuration for external services (in production, use environment variables)
 SERVICES = {
     "recognition": os.getenv("RECOGNITION_SERVICE", "http://recognition-service:8001"),
@@ -37,6 +64,12 @@ class RecognitionResponse(BaseModel):
     recognized: bool = Field(..., description="Whether the face was recognized")
     person_name: Optional[str] = Field(None, description="Name of the recognized person")
     confidence: Optional[float] = Field(None, description="Confidence score of the recognition")
+
+class UIEvent(BaseModel):
+    """Model for UI events"""
+    event_type: str = Field(..., description="Type of event (recognition, add_person, etc.)")
+    timestamp: str = Field(..., description="ISO format timestamp of the event")
+    data: Dict[str, Any] = Field(..., description="Event data")
 
 class LogEntry(BaseModel):
     """Model for log entries"""
@@ -58,6 +91,16 @@ async def get_http_client():
     async with httpx.AsyncClient(timeout=30.0) as client:
         yield client
 
+@app.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket):
+    await manager.connect(websocket)
+    try:
+        while True:
+            data = await websocket.receive_text()
+            # Handle any incoming WebSocket messages if needed
+    except WebSocketDisconnect:
+        manager.disconnect(websocket)
+
 @app.post("/recognize", 
     response_model=RecognitionResponse,
     responses={
@@ -77,6 +120,7 @@ async def recognize(
     Process a face recognition request:
     1. Send image to recognition service for analysis
     2. Log the result
+    3. Broadcast result to UI
     """
     content = await file.read()
     
@@ -96,6 +140,20 @@ async def recognize(
             device_id,
             client
         )
+        
+        # Broadcast to UI
+        ui_event = UIEvent(
+            event_type="recognition",
+            timestamp=datetime.utcnow().isoformat() + "Z",
+            data={
+                "recognized": result["recognized"],
+                "person_name": result.get("person_name"),
+                "confidence": result.get("confidence"),
+                "device_id": device_id,
+                "preview_image": result.get("preview_image")  # Base64 encoded image if available
+            }
+        )
+        await manager.broadcast(ui_event.dict())
         
         return RecognitionResponse(
             recognized=result["recognized"],
@@ -147,6 +205,18 @@ async def add_person(
                 }
             )
             db_response.raise_for_status()
+            
+            # Broadcast to UI
+            ui_event = UIEvent(
+                event_type="person_added",
+                timestamp=datetime.utcnow().isoformat() + "Z",
+                data={
+                    "name": name,
+                    "status": "success"
+                }
+            )
+            await manager.broadcast(ui_event.dict())
+            
             return {"status": "person added"}
         else:
             raise HTTPException(
@@ -225,4 +295,4 @@ async def log_event(
         print(f"Failed to log event: {str(e)}")
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=3000)
