@@ -37,6 +37,15 @@ def is_familiar(image_path):
     
     
 
+    
+def main():
+    res = is_familiar("pic1.jpeg")
+    print(res, "\n")
+   
+
+if __name__ == "__main__":
+    main()
+
         
 
 
