@@ -26,9 +26,7 @@ app.add_middleware(
 
 # Configuration for external services (in production, use environment variables)
 SERVICES = {
-    "face_detection": os.getenv("FACE_DETECTION_SERVICE", "http://face-detection-service:8001"),
-    "embedding": os.getenv("EMBEDDING_SERVICE", "http://embedding-service:8002"),
-    "matching": os.getenv("MATCHING_SERVICE", "http://matching-service:8003"),
+    "recognition": os.getenv("RECOGNITION_SERVICE", "http://recognition-service:8001"),
     "database": os.getenv("DATABASE_SERVICE", "http://database-service:8004"),
     "logging": os.getenv("LOGGING_SERVICE", "http://logging-service:8005")
 }
@@ -77,49 +75,32 @@ async def recognize(
 ):
     """
     Process a face recognition request:
-    1. Detect face in the image
-    2. Generate face embedding
-    3. Match against known faces
-    4. Log the result
+    1. Send image to recognition service for analysis
+    2. Log the result
     """
     content = await file.read()
     
     try:
-        # Step 1: Detect face
-        face_response = await client.post(
-            f"{SERVICES['face_detection']}/detect",
+        # Single call to recognition service
+        response = await client.post(
+            f"{SERVICES['recognition']}/analyze",
             files={"file": content}
         )
-        face_response.raise_for_status()
-        
-        # Step 2: Generate embedding
-        embedding_response = await client.post(
-            f"{SERVICES['embedding']}/generate",
-            files={"file": content}
-        )
-        embedding_response.raise_for_status()
-        embedding = embedding_response.json()["embedding"]
-        
-        # Step 3: Match embedding
-        match_response = await client.post(
-            f"{SERVICES['matching']}/match",
-            json={"embedding": embedding}
-        )
-        match_response.raise_for_status()
-        match_result = match_response.json()
+        response.raise_for_status()
+        result = response.json()
         
         # Log the event
         await log_event(
-            match_result["recognized"],
-            match_result.get("person_name"),
+            result["recognized"],
+            result.get("person_name"),
             device_id,
             client
         )
         
         return RecognitionResponse(
-            recognized=match_result["recognized"],
-            person_name=match_result.get("person_name"),
-            confidence=match_result.get("confidence")
+            recognized=result["recognized"],
+            person_name=result.get("person_name"),
+            confidence=result.get("confidence")
         )
         
     except httpx.HTTPStatusError as e:
@@ -148,30 +129,31 @@ async def add_person(
     content = await file.read()
     
     try:
-        # Step 1: Detect face
-        face_response = await client.post(
-            f"{SERVICES['face_detection']}/detect",
+        # Send to recognition service for face detection and embedding
+        recognition_response = await client.post(
+            f"{SERVICES['recognition']}/analyze",
             files={"file": content}
         )
-        face_response.raise_for_status()
+        recognition_response.raise_for_status()
+        result = recognition_response.json()
         
-        # Step 2: Generate embedding
-        embedding_response = await client.post(
-            f"{SERVICES['embedding']}/generate",
-            files={"file": content}
-        )
-        embedding_response.raise_for_status()
-        embedding = embedding_response.json()["embedding"]
-        
-        # Step 3: Store in database
-        db_response = await client.post(
-            f"{SERVICES['database']}/add-person",
-            json={"name": name, "embedding": embedding}
-        )
-        db_response.raise_for_status()
-        
-        return {"status": "person added"}
-        
+        if not result["recognized"]:
+            # Store in database
+            db_response = await client.post(
+                f"{SERVICES['database']}/add-person",
+                json={
+                    "name": name,
+                    "embedding": result["embedding"]
+                }
+            )
+            db_response.raise_for_status()
+            return {"status": "person added"}
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail="Face already exists in database"
+            )
+            
     except httpx.HTTPStatusError as e:
         if e.response.status_code == 404:
             raise HTTPException(status_code=400, detail="No face detected in image")
