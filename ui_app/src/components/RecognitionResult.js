@@ -15,7 +15,8 @@ import {
 
 function RecognitionResult({ event, onAddPerson }) {
   const { data } = event;
-  
+  const isRecognized = data?.status !== 'red';
+
   if (data.recognized) {
     return (
       <Box>

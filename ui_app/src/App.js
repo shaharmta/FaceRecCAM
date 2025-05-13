@@ -23,7 +23,7 @@ function App() {
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    const websocket = new WebSocket('ws://localhost:3000/ws');
+    const websocket = new WebSocket('ws://localhost:8000/ws');
     
     websocket.onopen = () => {
       setIsConnected(true);
