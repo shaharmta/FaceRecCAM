@@ -13,7 +13,7 @@ import {
   Cancel as CancelIcon
 } from '@mui/icons-material';
 
-function RecognitionResult({ event, onAddPerson }) {
+function RecognitionResult({ event, onAddPerson, onDismiss }) {
   const { data } = event;
   const isRecognized = data?.status !== 'red';
 
@@ -28,7 +28,7 @@ function RecognitionResult({ event, onAddPerson }) {
         </Box>
         
         <Typography variant="h6" gutterBottom>
-          Welcome, {data.person_name}!
+          Person ID: {data.person_id}
         </Typography>
         
         <Box sx={{ mt: 2 }}>
@@ -82,7 +82,7 @@ function RecognitionResult({ event, onAddPerson }) {
             startIcon={<PersonAddIcon />}
             onClick={onAddPerson}
           >
-            Add Person
+            Add Face
           </Button>
         </Grid>
         <Grid item>
@@ -90,6 +90,7 @@ function RecognitionResult({ event, onAddPerson }) {
             variant="outlined"
             color="error"
             startIcon={<CancelIcon />}
+            onClick={onDismiss}
           >
             Ignore
           </Button>
