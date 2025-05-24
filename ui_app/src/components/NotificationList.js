@@ -74,6 +74,12 @@ function NotificationList({ notifications = [], onAddPerson, onDismiss }) {
                       </Typography>
                     )}
                     
+                    {isRecognized && (
+                      <Typography variant="body1" sx={{ mt: 1 }}>
+                        Person ID: {data.person_id}
+                      </Typography>
+                    )}
+                    
                     <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
                       {date.toLocaleString()}
                     </Typography>
