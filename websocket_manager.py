@@ -1,5 +1,5 @@
 from fastapi import WebSocket, WebSocketDisconnect
-from typing import Set
+from typing import Set, Optional
 from datetime import datetime
 
 class WebSocketManager:
@@ -20,17 +20,22 @@ class WebSocketManager:
             except WebSocketDisconnect:
                 self.disconnect(ws)
 
-    async def broadcast_recognition(self, status: str, person_id: str, device_id: str, preview_image: str):
-        await self.broadcast({
+    async def broadcast_recognition(self, status: str, person_id: Optional[int], device_id: Optional[str], preview_image: str, vector: Optional[list[float]], person_name: Optional[str]):
+        """Broadcast a recognition event to all connected clients."""
+        message = {
             "event_type": "recognition",
-            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "timestamp": datetime.now().isoformat(),
             "data": {
                 "status": status,
                 "person_id": person_id,
                 "device_id": device_id,
-                "preview_image": preview_image
+                "preview_image": preview_image,
+                "vector": vector,
+                "person_name": person_name,
+                "recognized": status in ["green", "yellow"]
             }
-        })
+        }
+        await self.broadcast(message)
 
     async def broadcast_person_added(self):
         await self.broadcast({
