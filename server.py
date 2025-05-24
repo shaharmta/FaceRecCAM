@@ -10,10 +10,7 @@ from pydantic import BaseModel
 from face_db import get_conn
 
 class AddPersonPayload(BaseModel):
-    name: str
     vector: list[float]
-
-
 
 app = FastAPI()
 
@@ -35,7 +32,6 @@ async def websocket_endpoint(ws: WebSocket):
     except WebSocketDisconnect:
         manager.disconnect(ws)
 
-
 @app.post("/recognize")
 async def recognize(file: UploadFile = File(...), device_id: Optional[str] = Query(None)):
     try:
@@ -47,18 +43,10 @@ async def recognize(file: UploadFile = File(...), device_id: Optional[str] = Que
         status, vector, person_id = imagesProcessing.is_familiar(tmp_path)
         os.unlink(tmp_path)
 
-        # Get person's name if they were recognized
-        person_name = None
-        if status in ["green", "yellow"] and person_id:
-            with get_conn() as conn:
-                result = conn.execute("SELECT name FROM people WHERE id = ?", (person_id,)).fetchone()
-                if result:
-                    person_name = result[0]
-
         preview_image = base64.b64encode(content).decode("utf-8")
-        await manager.broadcast_recognition(status, person_id, device_id, preview_image, vector, person_name)
+        await manager.broadcast_recognition(status, person_id, device_id, preview_image, vector)
 
-        return {"status": status, "person_id": person_id, "vector": vector, "person_name": person_name}
+        return {"status": status, "person_id": person_id, "vector": vector}
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -66,18 +54,17 @@ async def recognize(file: UploadFile = File(...), device_id: Optional[str] = Que
 @app.post("/add-person")
 async def add_person(payload: AddPersonPayload):
     print("=== Add Person Request Received ===")
-    print(f"Name: {payload.name}")
     print(f"Vector length: {len(payload.vector)}")
     try:
-        if not payload.name or not payload.vector:
-            print("Error: Missing name or vector")
-            raise ValueError("Name and vector are required")
+        if not payload.vector:
+            print("Error: Missing vector")
+            raise ValueError("Vector is required")
             
         print("Calling add_new_person...")
-        imagesProcessing.add_new_person(payload.name, payload.vector)
-        print("Person added successfully")
+        person_id = imagesProcessing.add_new_person(payload.vector)
+        print(f"Person added successfully with ID {person_id}")
         await manager.broadcast_person_added()
-        return {"status": "person added"}
+        return {"status": "person added", "person_id": person_id}
     except Exception as e:
         print(f"Error in add_person: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -99,7 +86,32 @@ def health():
 async def list_people():
     try:
         with get_conn() as conn:
-            rows = conn.execute("SELECT id, name, last_seen FROM people").fetchall()
-            return {"people": [{"id": r[0], "name": r[1], "last_seen": r[2]} for r in rows]}
+            # Get detailed info about each person including their latest vector
+            rows = conn.execute("""
+                SELECT 
+                    p.person_id,
+                    MAX(v.last_checked) as last_seen,
+                    COUNT(v.vector_id) as vector_count,
+                    (
+                        SELECT vector 
+                        FROM vectors 
+                        WHERE person_id = p.person_id 
+                        ORDER BY last_checked DESC 
+                        LIMIT 1
+                    ) as latest_vector
+                FROM persons p
+                LEFT JOIN vectors v ON p.person_id = v.person_id
+                GROUP BY p.person_id
+                ORDER BY p.person_id
+            """).fetchall()
+            
+            return {
+                "people": [{
+                    "id": r[0],
+                    "last_seen": r[1],
+                    "vector_count": r[2],
+                    "has_vector": r[3] is not None
+                } for r in rows]
+            }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
