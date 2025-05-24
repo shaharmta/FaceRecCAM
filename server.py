@@ -7,7 +7,7 @@ import os
 from typing import Optional, List
 from websocket_manager import manager
 from pydantic import BaseModel
-from face_db import get_conn
+from face_db import get_conn, USE_LOCAL
 
 class AddPersonPayload(BaseModel):
     vector: list[float]
@@ -86,24 +86,49 @@ def health():
 async def list_people():
     try:
         with get_conn() as conn:
-            # Get detailed info about each person including their latest vector
-            rows = conn.execute("""
-                SELECT 
-                    p.person_id,
-                    MAX(v.last_checked) as last_seen,
-                    COUNT(v.vector_id) as vector_count,
-                    (
-                        SELECT vector 
-                        FROM vectors 
-                        WHERE person_id = p.person_id 
-                        ORDER BY last_checked DESC 
-                        LIMIT 1
-                    ) as latest_vector
-                FROM persons p
-                LEFT JOIN vectors v ON p.person_id = v.person_id
-                GROUP BY p.person_id
-                ORDER BY p.person_id
-            """).fetchall()
+            cur = conn.cursor()
+            try:
+                if USE_LOCAL:
+                    # SQLite version
+                    cur.execute("""
+                        SELECT 
+                            p.person_id,
+                            MAX(v.last_checked) as last_seen,
+                            COUNT(v.vector_id) as vector_count,
+                            (
+                                SELECT vector 
+                                FROM vectors 
+                                WHERE person_id = p.person_id 
+                                ORDER BY last_checked DESC 
+                                LIMIT 1
+                            ) as latest_vector
+                        FROM persons p
+                        LEFT JOIN vectors v ON p.person_id = v.person_id
+                        GROUP BY p.person_id
+                        ORDER BY p.person_id
+                    """)
+                else:
+                    # PostgreSQL version
+                    cur.execute("""
+                        SELECT 
+                            p.person_id,
+                            MAX(v.last_checked) as last_seen,
+                            COUNT(v.vector_id) as vector_count,
+                            (
+                                SELECT vector::text
+                                FROM vectors 
+                                WHERE person_id = p.person_id 
+                                ORDER BY last_checked DESC 
+                                LIMIT 1
+                            ) as latest_vector
+                        FROM persons p
+                        LEFT JOIN vectors v ON p.person_id = v.person_id
+                        GROUP BY p.person_id
+                        ORDER BY p.person_id
+                    """)
+                rows = cur.fetchall()
+            finally:
+                cur.close()
             
             return {
                 "people": [{
