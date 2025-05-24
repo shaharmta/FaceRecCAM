@@ -7,7 +7,7 @@ import math
 import sqlite3
 import os
 
-USE_LOCAL = True  # שנה ל־False אם חוזרים לדאטהבייס בענן
+USE_LOCAL = False  # שנה ל־False אם חוזרים לדאטהבייס בענן
 
 if USE_LOCAL:
     DB_PATH = "local_faces.db"
@@ -17,14 +17,25 @@ if USE_LOCAL:
 
     def create_tables():
         with get_conn() as conn:
-            # Drop existing table to recreate with new schema
-            conn.execute('DROP TABLE IF EXISTS people')
+            # Drop existing tables to recreate with new schema
+            conn.execute('DROP TABLE IF EXISTS vectors')
+            conn.execute('DROP TABLE IF EXISTS persons')
+            
+            # Create persons table (just IDs)
             conn.execute('''
-                CREATE TABLE IF NOT EXISTS people (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    name TEXT NOT NULL,
-                    vector TEXT,
-                    last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                CREATE TABLE IF NOT EXISTS persons (
+                    person_id INTEGER PRIMARY KEY AUTOINCREMENT
+                )
+            ''')
+            
+            # Create vectors table
+            conn.execute('''
+                CREATE TABLE IF NOT EXISTS vectors (
+                    vector_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    person_id INTEGER NOT NULL,
+                    vector TEXT NOT NULL,
+                    last_checked TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (person_id) REFERENCES persons(person_id)
                 )
             ''')
             conn.commit()
@@ -37,23 +48,55 @@ if USE_LOCAL:
         if norm1 == 0 or norm2 == 0:
             return 0
         return dot / (norm1 * norm2)
-    
 
-    def insert_new_person(name: str, vector: list[float]):
-        print(f"Adding person: {name} with vector length {len(vector)}")
+    def insert_new_person(vector: list[float]):
+        """Inserts a new person + their first vector, returns person_id."""
         vector_str = ",".join(map(str, vector))
         with get_conn() as conn:
-            conn.execute("INSERT INTO people (name, vector) VALUES (?, ?)", (name, vector_str))
+            # Create new person
+            cursor = conn.execute("INSERT INTO persons DEFAULT VALUES")
+            person_id = cursor.lastrowid
+            
+            # Insert vector
+            conn.execute("""
+                INSERT INTO vectors (person_id, vector)
+                VALUES (?, ?)
+            """, (person_id, vector_str))
+            
             conn.commit()
-            print(f"Successfully added {name} to database")
+            print(f"Successfully added new person with ID {person_id}")
+            return person_id
 
-    def insert_vector_for_person(person_id, vector):
+    def insert_vector_for_person(person_id: int, vector: list[float], max_vectors: int = 10):
+        """Inserts a vector for an existing person_id. If person has >= max_vectors, deletes oldest vector."""
         vector_str = ",".join(map(str, vector))
         with get_conn() as conn:
-            conn.execute("UPDATE people SET vector = ?, last_seen = CURRENT_TIMESTAMP WHERE id = ?", (vector_str, person_id))
+            # Count vectors for this person
+            cursor = conn.execute("SELECT COUNT(*) FROM vectors WHERE person_id = ?", (person_id,))
+            vector_count = cursor.fetchone()[0]
+            
+            if vector_count >= max_vectors:
+                # Delete oldest vector
+                conn.execute("""
+                    DELETE FROM vectors
+                    WHERE vector_id = (
+                        SELECT vector_id FROM vectors
+                        WHERE person_id = ?
+                        ORDER BY last_checked ASC
+                        LIMIT 1
+                    )
+                """, (person_id,))
+            
+            # Insert new vector
+            conn.execute("""
+                INSERT INTO vectors (person_id, vector)
+                VALUES (?, ?)
+            """, (person_id, vector_str))
+            
             conn.commit()
+            print(f"Successfully added new vector for person {person_id}")
 
-    def check_person_exists(vector, threshold=0.93):
+    def check_person_exists(vector: list[float], threshold: float = 0.93):
         """
         Compares input vector with stored vectors in local DB.
         Returns:
@@ -62,15 +105,19 @@ if USE_LOCAL:
         ("not found", None, None)
         """
         with get_conn() as conn:
-            rows = conn.execute("SELECT id, vector, last_seen FROM people").fetchall()
+            rows = conn.execute("""
+                SELECT v.person_id, v.vector, v.last_checked
+                FROM vectors v
+                INNER JOIN persons p ON v.person_id = p.person_id
+            """).fetchall()
+            
             for row in rows:
-                person_id, vec_str, last_seen = row
+                person_id, vec_str, last_checked = row
                 stored_vector = list(map(float, vec_str.split(',')))
                 similarity = cosine_similarity(vector, stored_vector)
                 if similarity >= threshold:
-                    return ("found", datetime.fromisoformat(last_seen), person_id)
+                    return ("found", datetime.fromisoformat(last_checked), person_id)
             return ("not found", None, None)
-
 
     create_tables()
 
@@ -80,36 +127,32 @@ else:
 
     # === CONFIGURATION ===
     DB_CONFIG = {
-        "host": "face-db-cluster.cluster-cnks2uk809i8.eu-north-1.rds.amazonaws.com",
-        "port": 5432,
-        "dbname": "postgres",
-        "user": "postgres",
-        "password": "7Te5M<jYoG7pL|dqKm$7~z:bseg~"
-    }
+    "host": "face-db-public.cluster-cnks2uk809i8.eu-north-1.rds.amazonaws.com",
+    "port": 5432,
+    "dbname": "postgres",
+    "user": "postgres",
+    "password": "AmitMatanShahar3"
+}
 
-    def get_connection():
+    def get_conn():  # Changed to match local version
         return psycopg2.connect(**DB_CONFIG)
 
     # === API FUNCTIONS ===
 
 
     #insert a completly new person tot he system 
-    def insert_new_person(name: str, vector: list[float]):
+    def insert_new_person(vector: list[float]):
         """Inserts a new person + their first vector, returns person_id."""
-        conn = get_connection()
+        conn = get_conn()
         cur = conn.cursor()
         try:
-            # Create new person
             cur.execute("INSERT INTO persons DEFAULT VALUES RETURNING person_id;")
             person_id = cur.fetchone()[0]
-            
-            # Insert vector
             vector_str = "[" + ",".join(str(x) for x in vector) + "]"
             cur.execute("""
                 INSERT INTO vectors (person_id, vector, last_checked)
                 VALUES (%s, %s::vector, NOW());
             """, (person_id, vector_str))
-            
             conn.commit()
             return person_id
         finally:
@@ -123,7 +166,7 @@ else:
         Inserts a vector for an existing person_id.
         If person has >= max_vectors → deletes oldest vector before inserting.
         """
-        conn = get_connection()
+        conn = get_conn()
         cur = conn.cursor()
         try:
             # 1️⃣ Count how many vectors this person has
@@ -166,7 +209,7 @@ else:
         or
         ("not found", None, None)
         """
-        conn = get_connection()
+        conn = get_conn()
         cur = conn.cursor()
         try:
             vector_str = "[" + ",".join(str(x) for x in input_vector) + "]"
