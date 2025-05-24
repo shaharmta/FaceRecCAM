@@ -96,7 +96,7 @@ The server broadcasts the following events:
      "timestamp": "2024-03-14T12:00:00Z",
      "data": {
        "recognized": true,
-       "person_name": "John Doe",
+       "person_id": 123,
        "confidence": 0.92,
        "device_id": "pi-001"
      }
@@ -109,8 +109,8 @@ The server broadcasts the following events:
      "event_type": "person_added",
      "timestamp": "2024-03-14T12:00:00Z",
      "data": {
-       "name": "John Doe",
-       "status": "success"
+       "status": "success",
+       "person_id": 123
      }
    }
    ```

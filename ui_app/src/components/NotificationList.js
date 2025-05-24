@@ -68,12 +68,6 @@ function NotificationList({ notifications = [], onAddPerson, onDismiss }) {
                       </Typography>
                     </Stack>
                     
-                    {isRecognized && data?.person_name && (
-                      <Typography variant="body1" sx={{ mt: 1 }}>
-                        Welcome, {data.person_name}!
-                      </Typography>
-                    )}
-                    
                     {isRecognized && (
                       <Typography variant="body1" sx={{ mt: 1 }}>
                         Person ID: {data.person_id}

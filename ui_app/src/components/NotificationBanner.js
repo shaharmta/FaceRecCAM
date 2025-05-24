@@ -33,7 +33,7 @@ function NotificationBanner({ event, onAddPerson }) {
         }}
       >
         <AlertTitle>Access Granted</AlertTitle>
-        Welcome, {data.person_name}!
+        Person ID: {data.person_id}
       </Alert>
     );
   }
