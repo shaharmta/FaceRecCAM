@@ -1,6 +1,7 @@
 import cv2
 import requests
 import time
+from face_db import get_conn, USE_LOCAL
 
 # Your server address - change accordingly
 API_URL = "http://localhost:8000/recognize"  # or server IP

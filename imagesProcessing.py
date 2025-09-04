@@ -3,8 +3,9 @@ from datetime import datetime, timedelta
 import face_db as facedb
 
 
-def add_new_person(vector): #case red than approve
-    facedb.insert_new_person(vector)
+def add_new_person(vector: list[float]):
+    """Add a new person with their face vector."""
+    return facedb.insert_new_person(vector)
 
 
 def add_new_visit(vector, person_id): #case yellow than approve
@@ -27,11 +28,12 @@ def is_familiar(image_path):
     db_response = facedb.check_person_exists(vector)
     if db_response[0] == "found":
         last_seen_date = db_response[1]
+        person_id = db_response[2]  # Get the person_id
         period = 14
         if is_within_period(last_seen_date, period): #person found & within period
-            return ("green", None, None)
+            return ("green", vector, person_id)  # Return the actual person_id
         else: #person found but not within period
-            return ("yellow", vector, db_response[2])
+            return ("yellow", vector, person_id)
     else: #person not found
         return ("red", vector, db_response[2])
     

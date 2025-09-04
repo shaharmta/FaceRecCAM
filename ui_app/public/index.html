@@ -4,7 +4,62 @@
     <meta charset="UTF-8" />
     <link rel="icon" href="%PUBLIC_URL%/favicon.ico" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Face Recognition UI</title>
+    <title>Face Recognition Access Control System</title>
+    
+    <!-- Google Fonts - Orbitron for high-tech appearance -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    
+    <style>
+      /* Global styles for high-tech appearance */
+      * {
+        box-sizing: border-box;
+      }
+      
+      body {
+        margin: 0;
+        font-family: 'Orbitron', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+          'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+          sans-serif;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+        background: #0a0a0a;
+        color: #ffffff;
+        overflow-x: hidden;
+      }
+      
+      /* Custom scrollbar for high-tech feel */
+      ::-webkit-scrollbar {
+        width: 8px;
+      }
+      
+      ::-webkit-scrollbar-track {
+        background: rgba(255, 255, 255, 0.1);
+        border-radius: 4px;
+      }
+      
+      ::-webkit-scrollbar-thumb {
+        background: linear-gradient(135deg, #00d4ff 0%, #ff00ff 100%);
+        border-radius: 4px;
+      }
+      
+      ::-webkit-scrollbar-thumb:hover {
+        background: linear-gradient(135deg, #4dffff 0%, #ff4dff 100%);
+      }
+      
+      /* Selection color */
+      ::selection {
+        background: rgba(0, 212, 255, 0.3);
+        color: #ffffff;
+      }
+      
+      /* Focus outline for accessibility */
+      *:focus {
+        outline: 2px solid #00d4ff;
+        outline-offset: 2px;
+      }
+    </style>
   </head>
   <body>
     <noscript>You need to enable JavaScript to run this app.</noscript>

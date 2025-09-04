@@ -20,7 +20,7 @@ class WebSocketManager:
             except WebSocketDisconnect:
                 self.disconnect(ws)
 
-    async def broadcast_recognition(self, status: str, person_id: Optional[int], device_id: Optional[str], preview_image: str, vector: Optional[list[float]], person_name: Optional[str]):
+    async def broadcast_recognition(self, status: str, person_id: Optional[int], device_id: Optional[str], preview_image: str, vector: Optional[list[float]]):
         """Broadcast a recognition event to all connected clients."""
         message = {
             "event_type": "recognition",
@@ -31,7 +31,6 @@ class WebSocketManager:
                 "device_id": device_id,
                 "preview_image": preview_image,
                 "vector": vector,
-                "person_name": person_name,
                 "recognized": status in ["green", "yellow"]
             }
         }

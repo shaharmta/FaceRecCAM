@@ -7,7 +7,7 @@ import math
 import sqlite3
 import os
 
-USE_LOCAL = False  # שנה ל־False אם חוזרים לדאטהבייס בענן
+USE_LOCAL = True  # שנה ל־False אם חוזרים לדאטהבייס בענן
 
 if USE_LOCAL:
     DB_PATH = "local_faces.db"
