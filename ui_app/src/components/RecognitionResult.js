@@ -80,7 +80,7 @@ function RecognitionResult({ event, onAddPerson, onDismiss }) {
             variant="contained"
             color="primary"
             startIcon={<PersonAddIcon />}
-            onClick={onAddPerson}
+            onClick={() => onAddPerson(data.vector)}
           >
             Add Face
           </Button>

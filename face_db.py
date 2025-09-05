@@ -7,7 +7,7 @@ import math
 import sqlite3
 import os
 
-USE_LOCAL = False  # שנה ל־False אם חוזרים לדאטהבייס בענן
+USE_LOCAL = True  # Set to True for local development
 
 if USE_LOCAL:
     DB_PATH = "local_faces.db"
@@ -17,9 +17,18 @@ if USE_LOCAL:
 
     def create_tables():
         with get_conn() as conn:
-            # Drop existing tables to recreate with new schema
-            conn.execute('DROP TABLE IF EXISTS vectors')
-            conn.execute('DROP TABLE IF EXISTS persons')
+            # Check if tables already exist
+            cursor = conn.execute("""
+                SELECT name FROM sqlite_master 
+                WHERE type='table' AND name IN ('persons', 'vectors')
+            """)
+            existing_tables = [row[0] for row in cursor.fetchall()]
+            
+            if len(existing_tables) == 2:
+                print("✅ Database tables already exist, skipping creation")
+                return
+            
+            print("📝 Creating database tables...")
             
             # Create persons table (just IDs)
             conn.execute('''
@@ -51,7 +60,7 @@ if USE_LOCAL:
 
     def insert_new_person(vector: list[float]):
         """Inserts a new person + their first vector, returns person_id."""
-        vector_str = ",".join(map(str, vector))
+        vector_str = "[" + ",".join(str(x) for x in vector) + "]"
         with get_conn() as conn:
             # Create new person
             cursor = conn.execute("INSERT INTO persons DEFAULT VALUES")
@@ -69,7 +78,7 @@ if USE_LOCAL:
 
     def insert_vector_for_person(person_id: int, vector: list[float], max_vectors: int = 10):
         """Inserts a vector for an existing person_id. If person has >= max_vectors, deletes oldest vector."""
-        vector_str = ",".join(map(str, vector))
+        vector_str = "[" + ",".join(str(x) for x in vector) + "]"
         with get_conn() as conn:
             # Count vectors for this person
             cursor = conn.execute("SELECT COUNT(*) FROM vectors WHERE person_id = ?", (person_id,))
@@ -79,12 +88,9 @@ if USE_LOCAL:
                 # Delete oldest vector
                 conn.execute("""
                     DELETE FROM vectors
-                    WHERE vector_id = (
-                        SELECT vector_id FROM vectors
-                        WHERE person_id = ?
-                        ORDER BY last_checked ASC
-                        LIMIT 1
-                    )
+                    WHERE person_id = ?
+                    ORDER BY last_checked ASC
+                    LIMIT 1
                 """, (person_id,))
             
             # Insert new vector
@@ -96,7 +102,7 @@ if USE_LOCAL:
             conn.commit()
             print(f"Successfully added new vector for person {person_id}")
 
-    def check_person_exists(vector: list[float], threshold: float = 0.93):
+    def check_person_exists(vector: list[float], threshold: float = 0.65):
         """
         Compares input vector with stored vectors in local DB.
         Returns:
@@ -113,7 +119,8 @@ if USE_LOCAL:
             
             for row in rows:
                 person_id, vec_str, last_checked = row
-                stored_vector = list(map(float, vec_str.split(',')))
+                # Parse the vector string back to list of floats
+                stored_vector = [float(x) for x in vec_str.strip('[]').split(',')]
                 similarity = cosine_similarity(vector, stored_vector)
                 if similarity >= threshold:
                     return ("found", datetime.fromisoformat(last_checked), person_id)

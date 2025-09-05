@@ -95,7 +95,7 @@ function NotificationList({ notifications = [], onAddPerson, onDismiss }) {
                       color="primary"
                       size="small"
                       startIcon={<PersonAddIcon />}
-                      onClick={() => onAddPerson(data)}
+                      onClick={() => onAddPerson(data.vector)}
                     >
                       Add Person
                     </Button>

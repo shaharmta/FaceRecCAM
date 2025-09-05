@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Dialog,
   DialogTitle,
@@ -10,10 +10,10 @@ import {
   Typography
 } from '@mui/material';
 
-function AddPersonDialog({ open, onClose, onSubmit }) {
+function AddPersonDialog({ open, onClose, onSubmit, existingVector, existingImage }) {
   const [name, setName] = useState('');
-  const [image, setImage] = useState(null);
-  const [preview, setPreview] = useState(null);
+  const [image, setImage] = useState(existingImage || null);
+  const [preview, setPreview] = useState(existingImage || null);
   const [error, setError] = useState('');
 
   const handleImageChange = (event) => {
@@ -42,12 +42,12 @@ function AddPersonDialog({ open, onClose, onSubmit }) {
       setError('Please enter a name');
       return;
     }
-    if (!image) {
-      setError('Please select an image');
+    if (!existingVector) {
+      setError('No face vector data available');
       return;
     }
     
-    onSubmit(name, image);
+    onSubmit(name, image, existingVector);
     handleClose();
   };
 
@@ -58,6 +58,13 @@ function AddPersonDialog({ open, onClose, onSubmit }) {
     setError('');
     onClose();
   };
+
+  // Reset form when existingVector changes
+  useEffect(() => {
+    if (existingVector) {
+      setError('');
+    }
+  }, [existingVector]);
 
   return (
     <Dialog open={open} onClose={handleClose} maxWidth="sm" fullWidth>
@@ -75,24 +82,43 @@ function AddPersonDialog({ open, onClose, onSubmit }) {
             sx={{ mb: 2 }}
           />
           
-          <Box sx={{ mb: 2 }}>
-            <input
-              accept="image/*"
-              style={{ display: 'none' }}
-              id="face-image"
-              type="file"
-              onChange={handleImageChange}
-            />
-            <label htmlFor="face-image">
-              <Button
-                variant="outlined"
-                component="span"
-                fullWidth
-              >
-                Select Face Image
-              </Button>
-            </label>
-          </Box>
+          {existingImage ? (
+            <Box sx={{ mb: 2 }}>
+              <Typography variant="body2" color="text.secondary" gutterBottom>
+                Detected Face Image:
+              </Typography>
+              <img
+                src={existingImage}
+                alt="Detected face"
+                style={{
+                  maxWidth: '100%',
+                  maxHeight: 200,
+                  objectFit: 'contain',
+                  border: '1px solid #ccc',
+                  borderRadius: 4
+                }}
+              />
+            </Box>
+          ) : (
+            <Box sx={{ mb: 2 }}>
+              <input
+                accept="image/*"
+                style={{ display: 'none' }}
+                id="face-image"
+                type="file"
+                onChange={handleImageChange}
+              />
+              <label htmlFor="face-image">
+                <Button
+                  variant="outlined"
+                  component="span"
+                  fullWidth
+                >
+                  Select Face Image
+                </Button>
+              </label>
+            </Box>
+          )}
           
           {preview && (
             <Box sx={{ mt: 2, textAlign: 'center' }}>
@@ -124,7 +150,7 @@ function AddPersonDialog({ open, onClose, onSubmit }) {
         <Button 
           onClick={handleSubmit}
           variant="contained"
-          disabled={!name.trim() || !image}
+          disabled={!name.trim() || !existingVector}
         >
           Add Person
         </Button>

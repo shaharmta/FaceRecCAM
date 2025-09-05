@@ -1,2 +1,10 @@
 fastapi==0.104.1
-uvicorn==0.23.2
+uvicorn[standard]==0.23.2
+deepface
+psycopg2-binary
+pydantic
+python-multipart
+tf-keras
+opencv-python
+requests
+pinecone

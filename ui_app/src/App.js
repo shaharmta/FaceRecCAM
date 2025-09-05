@@ -52,15 +52,27 @@ function App() {
     };
   }, []);
 
-  const handleAddPerson = async (name, image) => {
+  const handleAddPerson = async (vector) => {
+    if (!vector) {
+      setError('No face vector data available');
+      return;
+    }
+    
+    setShowAddPerson(true);
+  };
+
+  const API_BASE_URL = 'http://localhost:8000';
+
+  const handleSubmitPerson = async (name, image, vector) => {
     try {
-      const formData = new FormData();
-      formData.append('name', name);
-      formData.append('file', image);
-      
-      const response = await fetch('/add-person', {
+      const response = await fetch(`${API_BASE_URL}/add-person`, {
         method: 'POST',
-        body: formData,
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          vector: vector
+        }),
       });
       
       if (!response.ok) {
@@ -128,7 +140,9 @@ function App() {
       <AddPersonDialog
         open={showAddPerson}
         onClose={() => setShowAddPerson(false)}
-        onSubmit={handleAddPerson}
+        onSubmit={handleSubmitPerson}
+        existingVector={lastEvent?.data?.vector}
+        existingImage={lastEvent?.data?.preview_image ? `data:image/jpeg;base64,${lastEvent.data.preview_image}` : null}
       />
     </Container>
   );

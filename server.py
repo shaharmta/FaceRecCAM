@@ -1,13 +1,13 @@
 from fastapi import FastAPI, UploadFile, File, WebSocket, WebSocketDisconnect, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-import imagesProcessing
+import pinecone_imagesProcessing as imagesProcessing
 import tempfile
 import base64
 import os
 from typing import Optional, List
 from websocket_manager import manager
 from pydantic import BaseModel
-from face_db import get_conn, USE_LOCAL
+from pinecone_db import get_conn, USE_LOCAL, list_people
 
 class AddPersonPayload(BaseModel):
     vector: list[float]
@@ -35,20 +35,32 @@ async def websocket_endpoint(ws: WebSocket):
 @app.post("/recognize")
 async def recognize(file: UploadFile = File(...), device_id: Optional[str] = Query(None)):
     try:
+        print(f"=== RECOGNIZE REQUEST ===")
+        print(f"File: {file.filename}, Size: {file.size}, Device ID: {device_id}")
+        
         content = await file.read()
+        print(f"File content size: {len(content)} bytes")
+        
         with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as tmp:
             tmp.write(content)
             tmp_path = tmp.name
+            print(f"Temporary file created: {tmp_path}")
 
+        print("Calling imagesProcessing.is_familiar...")
         status, vector, person_id = imagesProcessing.is_familiar(tmp_path)
+        print(f"Recognition result: status={status}, person_id={person_id}, vector_length={len(vector) if vector else 'None'}")
+        
         os.unlink(tmp_path)
+        print(f"Temporary file deleted: {tmp_path}")
 
         preview_image = base64.b64encode(content).decode("utf-8")
         await manager.broadcast_recognition(status, person_id, device_id, preview_image, vector)
 
+        print(f"=== RECOGNITION COMPLETE ===")
         return {"status": status, "person_id": person_id, "vector": vector}
 
     except Exception as e:
+        print(f"Error in recognize endpoint: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/add-person")
@@ -83,60 +95,17 @@ def health():
     return {"status": "online"}
 
 @app.get("/list-people")
-async def list_people():
+async def list_people_endpoint():
     try:
-        with get_conn() as conn:
-            cur = conn.cursor()
-            try:
-                if USE_LOCAL:
-                    # SQLite version
-                    cur.execute("""
-                        SELECT 
-                            p.person_id,
-                            MAX(v.last_checked) as last_seen,
-                            COUNT(v.vector_id) as vector_count,
-                            (
-                                SELECT vector 
-                                FROM vectors 
-                                WHERE person_id = p.person_id 
-                                ORDER BY last_checked DESC 
-                                LIMIT 1
-                            ) as latest_vector
-                        FROM persons p
-                        LEFT JOIN vectors v ON p.person_id = v.person_id
-                        GROUP BY p.person_id
-                        ORDER BY p.person_id
-                    """)
-                else:
-                    # PostgreSQL version
-                    cur.execute("""
-                        SELECT 
-                            p.person_id,
-                            MAX(v.last_checked) as last_seen,
-                            COUNT(v.vector_id) as vector_count,
-                            (
-                                SELECT vector::text
-                                FROM vectors 
-                                WHERE person_id = p.person_id 
-                                ORDER BY last_checked DESC 
-                                LIMIT 1
-                            ) as latest_vector
-                        FROM persons p
-                        LEFT JOIN vectors v ON p.person_id = v.person_id
-                        GROUP BY p.person_id
-                        ORDER BY p.person_id
-                    """)
-                rows = cur.fetchall()
-            finally:
-                cur.close()
-            
-            return {
-                "people": [{
-                    "id": r[0],
-                    "last_seen": r[1],
-                    "vector_count": r[2],
-                    "has_vector": r[3] is not None
-                } for r in rows]
-            }
+        people = list_people()
+        
+        return {
+            "people": [{
+                "id": person["id"],
+                "last_seen": person["last_seen"],
+                "vector_count": person["vector_count"],
+                "has_vector": person["has_vector"]
+            } for person in people]
+        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
