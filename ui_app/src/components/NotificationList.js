@@ -63,7 +63,10 @@ function NotificationList({ notifications = [], onAddPerson, onDismiss }) {
         }
 
         const { event_type, timestamp, data } = notification;
-        const isRecognized = data?.recognized ?? false;
+        const isRecognition = event_type === 'recognition';
+        const isPersonAdded = event_type === 'person_added';
+        const isVisitUpdated = event_type === 'visit_updated';
+        const isRecognized = isRecognition ? (data?.recognized ?? false) : isPersonAdded;
         const date = timestamp ? new Date(timestamp) : new Date();
         
         return (
@@ -78,8 +81,8 @@ function NotificationList({ notifications = [], onAddPerson, onDismiss }) {
                 sx={{ 
                   width: '100%',
                   background: 'linear-gradient(135deg, rgba(26, 26, 26, 0.9) 0%, rgba(42, 42, 42, 0.9) 100%)',
-                  border: `3px solid ${isRecognized ? 'rgba(0, 255, 136, 0.3)' : 'rgba(255, 0, 102, 0.3)'}`,
-                  boxShadow: `0 8px 32px ${isRecognized ? 'rgba(0, 255, 136, 0.2)' : 'rgba(255, 0, 102, 0.2)'}, inset 0 1px 0 rgba(255, 255, 255, 0.1)`,
+                  border: `3px solid ${isPersonAdded ? 'rgba(0, 255, 136, 0.5)' : isRecognized ? 'rgba(0, 255, 136, 0.3)' : 'rgba(255, 0, 102, 0.3)'}`,
+                  boxShadow: `0 8px 32px ${isPersonAdded ? 'rgba(0, 255, 136, 0.3)' : isRecognized ? 'rgba(0, 255, 136, 0.2)' : 'rgba(255, 0, 102, 0.2)'}, inset 0 1px 0 rgba(255, 255, 255, 0.1)`,
                   backdropFilter: 'blur(15px)',
                   position: 'relative',
                   overflow: 'visible',
@@ -90,12 +93,12 @@ function NotificationList({ notifications = [], onAddPerson, onDismiss }) {
                     left: 0,
                     right: 0,
                     height: '3px',
-                    background: `linear-gradient(90deg, transparent 0%, ${isRecognized ? '#00ff88' : '#ff0066'} 50%, transparent 100%)`,
+                    background: `linear-gradient(90deg, transparent 0%, ${isPersonAdded ? '#00ff88' : isRecognized ? '#00ff88' : '#ff0066'} 50%, transparent 100%)`,
                     animation: 'scan 3s linear infinite',
                   },
                   '&:hover': {
                     transform: 'translateY(-2px)',
-                    boxShadow: `0 12px 40px ${isRecognized ? 'rgba(0, 255, 136, 0.3)' : 'rgba(255, 0, 102, 0.3)'}`,
+                    boxShadow: `0 12px 40px ${isPersonAdded ? 'rgba(0, 255, 136, 0.4)' : isRecognized ? 'rgba(0, 255, 136, 0.3)' : 'rgba(255, 0, 102, 0.3)'}`,
                   },
                   transition: 'all 0.3s ease',
                 }}
@@ -114,13 +117,23 @@ function NotificationList({ notifications = [], onAddPerson, onDismiss }) {
                               left: -5,
                               right: -5,
                               bottom: -5,
-                              background: `radial-gradient(circle, ${isRecognized ? 'rgba(0, 255, 136, 0.2)' : 'rgba(255, 0, 102, 0.2)'} 0%, transparent 70%)`,
+                              background: `radial-gradient(circle, ${isPersonAdded ? 'rgba(0, 255, 136, 0.25)' : isRecognized ? 'rgba(0, 255, 136, 0.2)' : 'rgba(255, 0, 102, 0.2)'} 0%, transparent 70%)`,
                               borderRadius: '50%',
                               animation: 'pulse 2s infinite',
                             },
                           }}
                         >
-                          {isRecognized ? (
+                          {isPersonAdded ? (
+                            <PersonAddIcon 
+                              sx={{ 
+                                color: 'success.main',
+                                fontSize: 32,
+                                position: 'relative',
+                                zIndex: 1,
+                                filter: 'drop-shadow(0 0 8px rgba(0, 255, 136, 0.6))',
+                              }}
+                            />
+                          ) : isRecognized ? (
                             <CheckCircleIcon 
                               color="success" 
                               sx={{ 
@@ -145,7 +158,7 @@ function NotificationList({ notifications = [], onAddPerson, onDismiss }) {
                         <Typography 
                           variant="h6"
                           sx={{
-                            background: `linear-gradient(135deg, ${isRecognized ? '#00ff88' : '#ff0066'} 0%, ${isRecognized ? '#00d4ff' : '#ff00ff'} 100%)`,
+                            background: `linear-gradient(135deg, ${isPersonAdded ? '#00ff88' : isRecognized ? '#00ff88' : '#ff0066'} 0%, ${isPersonAdded ? '#00d4ff' : isRecognized ? '#00d4ff' : '#ff00ff'} 100%)`,
                             backgroundClip: 'text',
                             WebkitBackgroundClip: 'text',
                             WebkitTextFillColor: 'transparent',
@@ -154,11 +167,11 @@ function NotificationList({ notifications = [], onAddPerson, onDismiss }) {
                             textTransform: 'uppercase',
                           }}
                         >
-                          {isRecognized ? 'Access Granted' : 'Unknown Face Detected'}
+                          {isPersonAdded ? 'Face Added to Database' : isRecognized ? 'Access Granted' : 'Unknown Face Detected'}
                         </Typography>
                       </Stack>
                       
-                      {isRecognized && (
+                      {isRecognition && isRecognized && (
                         <Typography 
                           variant="body1" 
                           sx={{ 
@@ -169,6 +182,19 @@ function NotificationList({ notifications = [], onAddPerson, onDismiss }) {
                           }}
                         >
                           Person ID: {data.person_id}
+                        </Typography>
+                      )}
+                      {isPersonAdded && (
+                        <Typography 
+                          variant="body2" 
+                          sx={{ 
+                            mt: 1,
+                            color: 'success.main',
+                            fontWeight: 500,
+                            letterSpacing: '0.05em',
+                          }}
+                        >
+                          New face stored successfully
                         </Typography>
                       )}
                       
@@ -203,7 +229,7 @@ function NotificationList({ notifications = [], onAddPerson, onDismiss }) {
                     </IconButton>
                   </Box>
                   
-                  {!isRecognized && (
+                  {isRecognition && !isRecognized && (
                     <Slide direction="up" in timeout={800}>
                       <Stack direction="row" spacing={2} sx={{ mt: 3 }}>
                         <Button
@@ -243,8 +269,30 @@ function NotificationList({ notifications = [], onAddPerson, onDismiss }) {
                       </Stack>
                     </Slide>
                   )}
+
+                  {isRecognition && !isRecognized && data?.preview_image && (
+                    <Box sx={{ mt: 2, display: 'flex', alignItems: 'center', gap: 2 }}>
+                      <img 
+                        src={`data:image/jpeg;base64,${data.preview_image}`}
+                        alt="Detected face"
+                        style={{ 
+                          width: 96, 
+                          height: 'auto', 
+                          borderRadius: 8,
+                          border: '1px solid rgba(255, 255, 255, 0.1)'
+                        }}
+                      />
+                      <Typography 
+                        variant="caption" 
+                        color="text.secondary"
+                        sx={{ letterSpacing: '0.05em' }}
+                      >
+                        Snapshot from detection
+                      </Typography>
+                    </Box>
+                  )}
                   
-                  {isRecognized && data?.confidence && (
+                  {isRecognition && isRecognized && data?.confidence && (
                     <Slide direction="up" in timeout={1000}>
                       <Box sx={{ mt: 3 }}>
                         <Chip

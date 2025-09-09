@@ -96,7 +96,7 @@ if USE_LOCAL:
             conn.commit()
             print(f"Successfully added new vector for person {person_id}")
 
-    def check_person_exists(vector: list[float], threshold: float = 0.93):
+    def check_person_exists(vector: list[float], threshold: float = 0.63):
         """
         Compares input vector with stored vectors in local DB.
         Returns:

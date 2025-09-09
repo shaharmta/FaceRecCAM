@@ -1,13 +1,13 @@
 from fastapi import FastAPI, UploadFile, File, WebSocket, WebSocketDisconnect, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-import imagesProcessing
+import pinecone_imageProcessing as imagesProcessing
 import tempfile
 import base64
 import os
 from typing import Optional, List
 from websocket_manager import manager
 from pydantic import BaseModel
-from face_db import get_conn, USE_LOCAL
+import pinecone_db as face_db
 
 class AddPersonPayload(BaseModel):
     vector: list[float]
@@ -34,21 +34,49 @@ async def websocket_endpoint(ws: WebSocket):
 
 @app.post("/recognize")
 async def recognize(file: UploadFile = File(...), device_id: Optional[str] = Query(None)):
+    print("=== Recognize Request Received ===")
+    print(f"Device ID: {device_id}")
+    print(f"File name: {file.filename}")
+    print(f"File content type: {file.content_type}")
+    
     try:
         content = await file.read()
+        print(f"File size: {len(content)} bytes")
+        
         with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as tmp:
             tmp.write(content)
             tmp_path = tmp.name
+            print(f"Temporary file created: {tmp_path}")
 
+        print("Calling imagesProcessing.is_familiar...")
         status, vector, person_id = imagesProcessing.is_familiar(tmp_path)
+        print(f"Recognition result - Status: {status}, Person ID: {person_id}, Vector length: {len(vector) if vector else 0}")
+
+        # If recognized and within period (green), add vector to Pinecone for same person_id
+        if status == "green" and person_id is not None and vector:
+            try:
+                face_db.insert_vector_for_person(person_id, vector)
+                print(f"Inserted new vector for person {person_id} (capped at 10, oldest pruned if needed)")
+            except Exception as e:
+                print(f"Warning: failed to insert vector for person {person_id}: {e}")
+        
         os.unlink(tmp_path)
+        print("Temporary file cleaned up")
 
         preview_image = base64.b64encode(content).decode("utf-8")
+        print("Broadcasting recognition result...")
         await manager.broadcast_recognition(status, person_id, device_id, preview_image, vector)
 
+        print("✅ Recognition request completed successfully")
         return {"status": status, "person_id": person_id, "vector": vector}
 
     except Exception as e:
+        print("❌ Error in /recognize endpoint:")
+        print(f"   Error type: {type(e).__name__}")
+        print(f"   Error message: {str(e)}")
+        print(f"   Error details: {repr(e)}")
+        import traceback
+        print(f"   Traceback: {traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/add-person")
@@ -85,58 +113,13 @@ def health():
 @app.get("/list-people")
 async def list_people():
     try:
-        with get_conn() as conn:
-            cur = conn.cursor()
-            try:
-                if USE_LOCAL:
-                    # SQLite version
-                    cur.execute("""
-                        SELECT 
-                            p.person_id,
-                            MAX(v.last_checked) as last_seen,
-                            COUNT(v.vector_id) as vector_count,
-                            (
-                                SELECT vector 
-                                FROM vectors 
-                                WHERE person_id = p.person_id 
-                                ORDER BY last_checked DESC 
-                                LIMIT 1
-                            ) as latest_vector
-                        FROM persons p
-                        LEFT JOIN vectors v ON p.person_id = v.person_id
-                        GROUP BY p.person_id
-                        ORDER BY p.person_id
-                    """)
-                else:
-                    # PostgreSQL version
-                    cur.execute("""
-                        SELECT 
-                            p.person_id,
-                            MAX(v.last_checked) as last_seen,
-                            COUNT(v.vector_id) as vector_count,
-                            (
-                                SELECT vector::text
-                                FROM vectors 
-                                WHERE person_id = p.person_id 
-                                ORDER BY last_checked DESC 
-                                LIMIT 1
-                            ) as latest_vector
-                        FROM persons p
-                        LEFT JOIN vectors v ON p.person_id = v.person_id
-                        GROUP BY p.person_id
-                        ORDER BY p.person_id
-                    """)
-                rows = cur.fetchall()
-            finally:
-                cur.close()
-            
-            return {
-                "people": [{
-                    "id": r[0],
-                    "last_seen": r[1],
-                    "vector_count": r[2],
-                    "has_vector": r[3] is not None
-                } for r in rows]
-            }
+        print("=== LIST PEOPLE REQUEST ===")
+        people = face_db.list_people()
+        print(f"Found {len(people)} people in Pinecone database")
+        
+        return {
+            "people": people
+        }
     except Exception as e:
+        print(f"Error listing people: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))

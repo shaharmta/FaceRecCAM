@@ -15,7 +15,6 @@ import {
 import { Security, Face, Wifi, WifiOff } from '@mui/icons-material';
 import RecognitionResult from './components/RecognitionResult';
 import NotificationList from './components/NotificationList';
-import LiveVideo from './components/LiveVideo';
 
 // Create a high-tech dark theme
 const darkTheme = createTheme({
@@ -118,9 +117,10 @@ function App() {
   const [notifications, setNotifications] = useState([]);
   const [isConnected, setIsConnected] = useState(false);
   const [error, setError] = useState(null);
+  const [personAdded, setPersonAdded] = useState(false);
 
   useEffect(() => {
-    const websocket = new WebSocket('ws://127.0.0.1:8000/ws')
+    const websocket = new WebSocket('ws://facecambackend.eu-north-1.elasticbeanstalk.com/ws')
 
     websocket.onopen = () => {
       setIsConnected(true);
@@ -138,7 +138,13 @@ function App() {
     
     websocket.onmessage = (event) => {
       const data = JSON.parse(event.data);
-      setLastEvent(data);
+      if (data.event_type === 'recognition') {
+        setLastEvent(data);
+      }
+      if (data.event_type === 'person_added') {
+        setPersonAdded(true);
+        setTimeout(() => setPersonAdded(false), 3000);
+      }
       setNotifications(prev => [data, ...prev].slice(0, 10));
     };
     
@@ -165,7 +171,7 @@ function App() {
       console.log("Vector type:", typeof lastEvent.data.vector);
       console.log("Vector length:", lastEvent.data.vector.length);
   
-      const response = await fetch('/add-person', {
+      const response = await fetch('http://facecambackend.eu-north-1.elasticbeanstalk.com//add-person', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -180,6 +186,8 @@ function App() {
       if (!response.ok) {
         throw new Error(`Failed to add person: ${responseText}`);
       }
+      // Clear the main frame after successful add (same effect as Ignore)
+      setLastEvent(null);
     } catch (error) {
       console.error("=== Add Person Error ===");
       console.error("Error type:", error.name);
@@ -291,15 +299,9 @@ function App() {
               )}
             </Box>
             
-            {/* Main Content Grid */}
-            <Grid container spacing={4}>
-              {/* Live Video Feed - Left Column */}
-              <Grid item xs={12} lg={8}>
-                <LiveVideo />
-              </Grid>
-
-              {/* Recognition Results - Right Column */}
-              <Grid item xs={12} lg={4}>
+            {/* Centered Recognition Result */}
+            <Box sx={{ display: 'flex', justifyContent: 'center' }}>
+              <Box sx={{ width: '100%', maxWidth: 640 }}>
                 <Paper 
                   sx={{ 
                     p: 3, 
@@ -321,6 +323,18 @@ function App() {
                     },
                   }}
                 >
+                  {personAdded && (
+                    <Alert 
+                      severity="success" 
+                      sx={{ 
+                        mb: 2,
+                        background: 'linear-gradient(135deg, rgba(0, 255, 136, 0.1) 0%, rgba(0, 255, 136, 0.05) 100%)',
+                        border: '1px solid rgba(0, 255, 136, 0.3)'
+                      }}
+                    >
+                      Face successfully added to the database
+                    </Alert>
+                  )}
                   {lastEvent ? (
                     <RecognitionResult 
                       event={lastEvent}
@@ -353,20 +367,23 @@ function App() {
                     </Box>
                   )}
                 </Paper>
-              </Grid>
-            </Grid>
+              </Box>
+            </Box>
 
-            {/* Recent Events - Full Width */}
-            <Paper 
-              sx={{ 
-                p: 4,
-                mt: 4,
-                background: 'linear-gradient(135deg, rgba(26, 26, 26, 0.9) 0%, rgba(42, 42, 42, 0.9) 100%)',
-                border: '1px solid rgba(255, 0, 255, 0.2)',
-                boxShadow: '0 8px 32px rgba(255, 0, 255, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.1)',
-                backdropFilter: 'blur(20px)',
-              }}
-            >
+            {/* Recent Events - Centered Below */}
+            <Box sx={{ display: 'flex', justifyContent: 'center' }}>
+              <Paper 
+                sx={{ 
+                  p: 4,
+                  mt: 4,
+                  width: '100%',
+                  maxWidth: 800,
+                  background: 'linear-gradient(135deg, rgba(26, 26, 26, 0.9) 0%, rgba(42, 42, 42, 0.9) 100%)',
+                  border: '1px solid rgba(255, 0, 255, 0.2)',
+                  boxShadow: '0 8px 32px rgba(255, 0, 255, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.1)',
+                  backdropFilter: 'blur(20px)',
+                }}
+              >
               <Typography 
                 variant="h5" 
                 gutterBottom 
@@ -394,7 +411,8 @@ function App() {
                 onAddPerson={handleAddPerson}
                 onDismiss={handleDismissNotification}
               />
-            </Paper>
+              </Paper>
+            </Box>
           </Box>
         </Container>
 
